@@ -31,21 +31,37 @@ class LLMClient:
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def chat_json(self, system: str, user: str, schema: type[BaseModel]) -> BaseModel:
-        """Structured output. Returns an instance of `schema`."""
-        payload = {
+        """Structured output. Returns an instance of `schema`.
+
+        Works across vLLM (guided_json), Together, OpenRouter, and OpenAI.
+        Strategy:
+          1. Tell the model in the system prompt what JSON it must produce.
+          2. Use response_format=json_object for generic JSON mode.
+          3. Also pass guided_json — vLLM enforces the schema; other backends ignore it.
+          4. Parse, validate with Pydantic, retry on failure (tenacity).
+        """
+        json_schema = schema.model_json_schema()
+        system_with_schema = (
+            f"{system}\n\n"
+            f"You MUST respond with a single JSON object matching this schema:\n"
+            f"{json.dumps(json_schema)}\n"
+            f"Return ONLY the JSON object, no markdown, no prose."
+        )
+
+        payload: dict = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": system},
+                {"role": "system", "content": system_with_schema},
                 {"role": "user", "content": user},
             ],
             "temperature": 0.2,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {"name": schema.__name__, "schema": schema.model_json_schema()},
-            },
+            "max_tokens": 2048,
+            "response_format": {"type": "json_object"},
+            # vLLM-specific hard schema enforcement; non-vLLM backends ignore this.
+            "guided_json": json_schema,
         }
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        with httpx.Client(timeout=120.0) as client:
+        with httpx.Client(timeout=180.0) as client:
             r = client.post(f"{self.base_url}/chat/completions", json=payload, headers=headers)
         if r.status_code != 200:
             raise LLMError(f"LLM HTTP {r.status_code}: {r.text[:500]}")

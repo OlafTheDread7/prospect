@@ -4,7 +4,9 @@ import type { Brief, Account } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-async function loadData(): Promise<{ briefs: (Brief & { account: Account | null })[]; pending: number }> {
+type Row = Brief & { account: Account | null };
+
+async function loadData(): Promise<{ briefs: Row[]; pending: number }> {
   try {
     const db = supabaseAdmin();
     const [briefsRes, pendingRes] = await Promise.all([
@@ -20,7 +22,6 @@ async function loadData(): Promise<{ briefs: (Brief & { account: Account | null 
       pending: pendingRes.count ?? 0,
     };
   } catch {
-    // Supabase not configured yet — show empty state.
     return { briefs: [], pending: 0 };
   }
 }
@@ -68,39 +69,45 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-3 text-left">Account</th>
-                <th className="px-4 py-3 text-left">Score</th>
-                <th className="px-4 py-3 text-left">Summary</th>
-                <th className="px-4 py-3 text-left">Created</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
-              {briefs.map((b) => (
-                <tr key={b.id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
-                    <Link href={`/dashboard/briefs/${b.id}`} className="font-medium text-brand-700 hover:underline">
+          {/* Header */}
+          <div className="grid grid-cols-12 gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <div className="col-span-3">Account</div>
+            <div className="col-span-1">Score</div>
+            <div className="col-span-6">Summary</div>
+            <div className="col-span-2">Created</div>
+          </div>
+
+          {/* Rows — each row is a <Link>, so the whole row is clickable */}
+          <ul className="divide-y divide-slate-100">
+            {briefs.map((b) => (
+              <li key={b.id}>
+                <Link
+                  href={`/dashboard/briefs/${b.id}`}
+                  className="grid grid-cols-12 gap-4 px-4 py-3 text-sm transition hover:bg-brand-50"
+                >
+                  <div className="col-span-3">
+                    <div className="font-semibold text-brand-700">
                       {b.account?.company_name || b.account?.domain || "—"}
-                    </Link>
+                    </div>
                     <div className="text-xs text-slate-500">{b.account?.domain}</div>
-                  </td>
-                  <td className="px-4 py-3">
+                  </div>
+                  <div className="col-span-1">
                     <span
-                      className={`inline-block rounded px-2 py-1 text-xs font-semibold ${scoreColor(b.score)}`}
+                      className={`inline-block rounded px-2 py-1 text-xs font-semibold ${scoreColor(
+                        b.score
+                      )}`}
                     >
                       {b.score ?? "—"}/10
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-700 line-clamp-2 max-w-md">{b.summary}</td>
-                  <td className="px-4 py-3 text-slate-500">
+                  </div>
+                  <div className="col-span-6 text-slate-700 line-clamp-2">{b.summary}</div>
+                  <div className="col-span-2 text-slate-500">
                     {new Date(b.created_at).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
