@@ -27,3 +27,5 @@ out/
 *.log
 tmp/
 scratch/
+
+*.tsbuildinfo
